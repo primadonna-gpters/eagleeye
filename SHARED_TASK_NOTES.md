@@ -2,7 +2,7 @@
 
 ## Current Status
 
-MVP 구현 완료. structlog 로깅 추가됨 (print() → structlog 교체).
+MVP 구현 완료. 단위 테스트 32개 추가됨 (모든 integration client + models 커버).
 
 ## Project Structure
 
@@ -10,20 +10,27 @@ MVP 구현 완료. structlog 로깅 추가됨 (print() → structlog 교체).
 src/eagleeye/
 ├── app.py              # 메인 Slack 봇 (slash command + mention 핸들러)
 ├── config.py           # pydantic-settings 기반 설정
-├── logging.py          # structlog 설정 (NEW)
+├── logging.py          # structlog 설정
 ├── integrations/
 │   ├── slack_search.py # Slack 메시지 검색
 │   ├── notion.py       # Notion 페이지 검색
 │   └── linear.py       # Linear 이슈 검색 (GraphQL)
 └── models/
     └── search.py       # 통합 SearchResult 모델
+
+tests/
+├── conftest.py         # pytest fixtures (mock responses)
+├── test_slack_search.py # SlackSearchClient 테스트 (5개)
+├── test_notion.py      # NotionSearchClient 테스트 (11개)
+├── test_linear.py      # LinearClient 테스트 (8개)
+└── test_models.py      # SearchResult 모델 테스트 (8개)
 ```
 
 ## Next Steps (우선순위 순)
 
-1. **테스트 작성**
-   - 각 integration client 단위 테스트
-   - mock 응답으로 테스트
+1. **app.py 테스트 작성** (선택)
+   - Slack 봇 핸들러 통합 테스트
+   - slash command, mention 핸들러 테스트
 
 2. **Slack App 설정 가이드 작성** (선택)
    - Socket Mode 활성화 방법
@@ -49,6 +56,19 @@ python -m eagleeye
 
 # Production 모드 (JSON 로그 출력)
 ENVIRONMENT=production python -m eagleeye
+```
+
+## Test Commands
+
+```bash
+# 모든 테스트 실행
+pytest tests/ -v
+
+# 특정 모듈 테스트
+pytest tests/test_slack_search.py -v
+pytest tests/test_notion.py -v
+pytest tests/test_linear.py -v
+pytest tests/test_models.py -v
 ```
 
 ## Code Quality
