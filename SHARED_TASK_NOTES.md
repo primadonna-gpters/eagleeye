@@ -2,13 +2,13 @@
 
 ## Current Status
 
-MVP 구현 완료. 단위 테스트 46개 (모든 코어 모듈 커버).
+MVP 구현 완료 + 검색 필터 기능 추가. 단위 테스트 62개 (모든 코어 모듈 커버).
 
 ## Project Structure
 
 ```
 src/eagleeye/
-├── app.py              # 메인 Slack 봇 (slash command + mention 핸들러)
+├── app.py              # 메인 Slack 봇 (slash command + mention 핸들러 + 필터 파싱)
 ├── config.py           # pydantic-settings 기반 설정
 ├── logging.py          # structlog 설정
 ├── integrations/
@@ -20,23 +20,38 @@ src/eagleeye/
 
 tests/
 ├── conftest.py         # pytest fixtures (mock responses)
-├── test_app.py         # EagleEyeBot 테스트 (14개)
+├── test_app.py         # EagleEyeBot 테스트 (30개, 필터 테스트 포함)
 ├── test_slack_search.py # SlackSearchClient 테스트 (5개)
 ├── test_notion.py      # NotionSearchClient 테스트 (11개)
 ├── test_linear.py      # LinearClient 테스트 (8개)
 └── test_models.py      # SearchResult 모델 테스트 (8개)
 ```
 
+## Search Filter Feature
+
+검색 시 특정 소스만 지정하여 검색 가능:
+
+```bash
+/search --slack api error          # Slack만 검색
+/search --notion documentation     # Notion만 검색
+/search --linear bug               # Linear만 검색
+/search --slack --notion api       # Slack + Notion 검색
+/search api error                  # 전체 검색 (기본값)
+```
+
+- 플래그는 쿼리 어디에나 위치 가능 (앞, 중간, 끝)
+- 대소문자 구분 없음 (`--SLACK`, `--Notion` 모두 동작)
+
 ## Next Steps (우선순위 순)
 
-1. **Slack App 설정 가이드 작성** (선택)
+1. **결과 캐싱** (선택)
+   - 동일 쿼리 반복 검색 시 캐시 활용
+   - Redis 또는 인메모리 캐시
+
+2. **Slack App 설정 가이드 작성** (선택)
    - Socket Mode 활성화 방법
    - 필요한 OAuth scopes 목록
    - Slash command 등록 방법
-
-2. **기능 확장** (선택)
-   - 검색 필터 옵션 (`/search --slack query`, `/search --notion query`)
-   - 결과 캐싱
 
 3. **E2E 통합 테스트** (선택)
    - 실제 API 연동 테스트 (테스트 계정 필요)
@@ -65,7 +80,7 @@ ENVIRONMENT=production python -m eagleeye
 pytest tests/ -v
 
 # 특정 모듈 테스트
-pytest tests/test_app.py -v        # EagleEyeBot
+pytest tests/test_app.py -v        # EagleEyeBot (필터 테스트 포함)
 pytest tests/test_slack_search.py -v
 pytest tests/test_notion.py -v
 pytest tests/test_linear.py -v
