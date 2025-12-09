@@ -2,7 +2,7 @@
 
 ## Current Status
 
-MVP 구현 완료. 단위 테스트 32개 추가됨 (모든 integration client + models 커버).
+MVP 구현 완료. 단위 테스트 46개 (모든 코어 모듈 커버).
 
 ## Project Structure
 
@@ -20,6 +20,7 @@ src/eagleeye/
 
 tests/
 ├── conftest.py         # pytest fixtures (mock responses)
+├── test_app.py         # EagleEyeBot 테스트 (14개)
 ├── test_slack_search.py # SlackSearchClient 테스트 (5개)
 ├── test_notion.py      # NotionSearchClient 테스트 (11개)
 ├── test_linear.py      # LinearClient 테스트 (8개)
@@ -28,18 +29,17 @@ tests/
 
 ## Next Steps (우선순위 순)
 
-1. **app.py 테스트 작성** (선택)
-   - Slack 봇 핸들러 통합 테스트
-   - slash command, mention 핸들러 테스트
-
-2. **Slack App 설정 가이드 작성** (선택)
+1. **Slack App 설정 가이드 작성** (선택)
    - Socket Mode 활성화 방법
    - 필요한 OAuth scopes 목록
    - Slash command 등록 방법
 
-3. **기능 확장** (선택)
+2. **기능 확장** (선택)
    - 검색 필터 옵션 (`/search --slack query`, `/search --notion query`)
    - 결과 캐싱
+
+3. **E2E 통합 테스트** (선택)
+   - 실제 API 연동 테스트 (테스트 계정 필요)
 
 ## How to Run
 
@@ -65,6 +65,7 @@ ENVIRONMENT=production python -m eagleeye
 pytest tests/ -v
 
 # 특정 모듈 테스트
+pytest tests/test_app.py -v        # EagleEyeBot
 pytest tests/test_slack_search.py -v
 pytest tests/test_notion.py -v
 pytest tests/test_linear.py -v
@@ -78,8 +79,8 @@ pytest tests/test_models.py -v
 mypy src/
 
 # Linting + 포맷
-ruff check --fix src/
-ruff format src/
+ruff check --fix src/ tests/
+ruff format src/ tests/
 ```
 
 ## Required Slack App Permissions
