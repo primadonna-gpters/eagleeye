@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from eagleeye.mcp.client import (
+    SLACK_GET_CHANNEL_HISTORY,
+    SLACK_LIST_CHANNELS,
     MCPConnection,
     MCPSearchClient,
     _server_type_to_result_type,
@@ -27,8 +29,15 @@ class TestMCPServerConfig:
 
         assert config.server_type == ServerType.SLACK
         assert config.command == "npx"
-        assert "@anthropic-ai/mcp-server-slack" in config.args
+        assert "@modelcontextprotocol/server-slack" in config.args
         assert config.env["SLACK_BOT_TOKEN"] == "xoxb-test-token"
+
+    def test_slack_config_with_team_id(self) -> None:
+        """Test Slack MCP server config with team ID."""
+        config = MCPServerConfig.slack("xoxb-test-token", team_id="T12345")
+
+        assert config.env["SLACK_BOT_TOKEN"] == "xoxb-test-token"
+        assert config.env["SLACK_TEAM_ID"] == "T12345"
 
     def test_notion_config(self) -> None:
         """Test Notion MCP server config creation."""
@@ -37,7 +46,7 @@ class TestMCPServerConfig:
         assert config.server_type == ServerType.NOTION
         assert config.command == "npx"
         assert "@notionhq/notion-mcp-server" in config.args
-        assert config.env["NOTION_API_KEY"] == "secret_notion_key"
+        assert config.env["NOTION_TOKEN"] == "secret_notion_key"
 
     def test_linear_config(self) -> None:
         """Test Linear MCP server config creation."""
@@ -45,7 +54,7 @@ class TestMCPServerConfig:
 
         assert config.server_type == ServerType.LINEAR
         assert config.command == "npx"
-        assert "mcp-server-linear" in config.args
+        assert "linear-mcp-server" in config.args
         assert config.env["LINEAR_API_KEY"] == "lin_api_key"
 
     def test_custom_config(self) -> None:
@@ -82,8 +91,8 @@ class TestSearchToolNames:
     """Tests for search tool name mappings."""
 
     def test_slack_tool_name(self) -> None:
-        """Test Slack search tool name."""
-        assert SEARCH_TOOL_NAMES[ServerType.SLACK] == "search_messages"
+        """Test Slack search tool name (uses channel history as there's no search)."""
+        assert SEARCH_TOOL_NAMES[ServerType.SLACK] == "slack_get_channel_history"
 
     def test_notion_tool_name(self) -> None:
         """Test Notion search tool name."""
@@ -91,18 +100,33 @@ class TestSearchToolNames:
 
     def test_linear_tool_name(self) -> None:
         """Test Linear search tool name."""
-        assert SEARCH_TOOL_NAMES[ServerType.LINEAR] == "search_issues"
+        assert SEARCH_TOOL_NAMES[ServerType.LINEAR] == "linear_search_issues"
+
+    def test_slack_tool_constants(self) -> None:
+        """Test Slack tool name constants."""
+        assert SLACK_LIST_CHANNELS == "slack_list_channels"
+        assert SLACK_GET_CHANNEL_HISTORY == "slack_get_channel_history"
 
 
 class TestGetSearchToolArguments:
     """Tests for search tool arguments."""
 
-    def test_slack_arguments(self) -> None:
-        """Test Slack search arguments."""
+    def test_slack_arguments_without_channel(self) -> None:
+        """Test Slack arguments without channel ID."""
         args = get_search_tool_arguments(ServerType.SLACK, "test query", limit=10)
 
-        assert args["query"] == "test query"
-        assert args["count"] == 10
+        # Slack uses channel history, so query is not used
+        assert args["limit"] == 10
+        assert "channel_id" not in args
+
+    def test_slack_arguments_with_channel(self) -> None:
+        """Test Slack arguments with channel ID."""
+        args = get_search_tool_arguments(
+            ServerType.SLACK, "test query", limit=10, channel_id="C12345"
+        )
+
+        assert args["limit"] == 10
+        assert args["channel_id"] == "C12345"
 
     def test_notion_arguments(self) -> None:
         """Test Notion search arguments."""
@@ -341,3 +365,104 @@ class TestMCPResultParsing:
 
         assert result is not None
         assert result.author == "John Doe"
+
+
+class TestSlackSearch:
+    """Tests for Slack search functionality."""
+
+    @pytest.mark.asyncio
+    async def test_search_slack_filters_by_query(self) -> None:
+        """Test that Slack search filters messages by query."""
+        from mcp.types import TextContent
+
+        configs = [MCPServerConfig.slack("token")]
+        client = MCPSearchClient(configs)
+
+        mock_connection = MagicMock()
+        mock_connection.session = MagicMock()
+
+        # Mock channel list response
+        channels_content = TextContent(
+            type="text", text='[{"id": "C123", "name": "general"}]'
+        )
+        channels_result = MagicMock(content=[channels_content])
+
+        # Mock channel history response with messages
+        history_content = TextContent(
+            type="text",
+            text='[{"text": "Hello world", "user": "U123", "ts": "123.456"}, '
+            '{"text": "Other message", "user": "U456", "ts": "789.012"}]',
+        )
+        history_result = MagicMock(content=[history_content])
+
+        mock_connection.call_tool = AsyncMock(
+            side_effect=[channels_result, history_result]
+        )
+
+        results = await client._search_slack(mock_connection, "hello", limit=5)
+
+        # Should only return the message containing "hello"
+        assert len(results) == 1
+        assert results[0].snippet == "Hello world"
+        assert results[0].title == "#general"
+
+    @pytest.mark.asyncio
+    async def test_search_slack_handles_empty_channels(self) -> None:
+        """Test Slack search when no channels are returned."""
+        from mcp.types import TextContent
+
+        configs = [MCPServerConfig.slack("token")]
+        client = MCPSearchClient(configs)
+
+        mock_connection = MagicMock()
+        mock_connection.session = MagicMock()
+
+        # Mock empty channel list
+        channels_content = TextContent(type="text", text="[]")
+        channels_result = MagicMock(content=[channels_content])
+
+        mock_connection.call_tool = AsyncMock(return_value=channels_result)
+
+        results = await client._search_slack(mock_connection, "test", limit=5)
+
+        assert len(results) == 0
+
+    def test_parse_slack_channels(self) -> None:
+        """Test parsing Slack channels from MCP result."""
+        from mcp.types import TextContent
+
+        configs = [MCPServerConfig.slack("token")]
+        client = MCPSearchClient(configs)
+
+        content = TextContent(
+            type="text",
+            text='[{"id": "C123", "name": "general"}, {"id": "C456", "name": "dev"}]',
+        )
+        result = MagicMock(content=[content])
+
+        channels = client._parse_slack_channels(result)
+
+        assert len(channels) == 2
+        assert channels[0]["id"] == "C123"
+        assert channels[1]["name"] == "dev"
+
+    def test_parse_slack_history(self) -> None:
+        """Test parsing Slack history and filtering by query."""
+        from mcp.types import TextContent
+
+        configs = [MCPServerConfig.slack("token")]
+        client = MCPSearchClient(configs)
+
+        content = TextContent(
+            type="text",
+            text='[{"text": "API error occurred", "user": "U123", "ts": "123.456"}, '
+            '{"text": "Normal message", "user": "U456", "ts": "789.012"}]',
+        )
+        result = MagicMock(content=[content])
+        channel = {"id": "C123", "name": "general"}
+
+        results = client._parse_slack_history(result, channel, "api")
+
+        assert len(results) == 1
+        assert results[0].snippet == "API error occurred"
+        assert results[0].source == SearchResultType.SLACK
