@@ -1,118 +1,90 @@
 """Pytest configuration and fixtures."""
 
-from collections.abc import Generator
+import json
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-
-@pytest.fixture
-def mock_slack_response() -> dict[str, Any]:
-    """Sample Slack search_messages response."""
-    return {
-        "ok": True,
-        "messages": {
-            "matches": [
-                {
-                    "permalink": "https://workspace.slack.com/archives/C123/p1234567890",
-                    "text": "This is a test message about the project",
-                    "username": "testuser",
-                    "ts": "1234567890.123456",
-                    "channel": {"name": "general"},
-                },
-                {
-                    "permalink": "https://workspace.slack.com/archives/C456/p1234567891",
-                    "text": "Another message with search keyword",
-                    "username": "anotheruser",
-                    "ts": "1234567891.654321",
-                    "channel": {"name": "random"},
-                },
-            ]
-        },
-    }
+from eagleeye.models.search import SearchResult, SearchResultType
 
 
 @pytest.fixture
-def mock_notion_response() -> dict[str, Any]:
-    """Sample Notion search response."""
-    return {
-        "results": [
-            {
-                "object": "page",
-                "id": "abc123-def456",
-                "url": "https://notion.so/Test-Page-abc123def456",
-                "properties": {
-                    "title": {
-                        "type": "title",
-                        "title": [{"plain_text": "Test Page Title"}],
-                    },
-                    "Description": {
-                        "type": "rich_text",
-                        "rich_text": [{"plain_text": "This is the page description"}],
-                    },
-                },
-            },
-            {
-                "object": "database",
-                "id": "xyz789",
-                "url": "https://notion.so/Test-Database-xyz789",
-                "title": [{"plain_text": "Test Database"}],
-                "properties": {},
-            },
-        ]
-    }
+def mock_mcp_search_results() -> list[SearchResult]:
+    """Sample search results from MCP servers."""
+    return [
+        SearchResult(
+            source=SearchResultType.SLACK,
+            title="#general",
+            url="https://workspace.slack.com/archives/C123/p1234567890",
+            snippet="This is a test message about the project",
+            author="testuser",
+            timestamp="1234567890",
+        ),
+        SearchResult(
+            source=SearchResultType.NOTION,
+            title="Test Page Title",
+            url="https://notion.so/Test-Page-abc123def456",
+            snippet="This is the page description",
+        ),
+        SearchResult(
+            source=SearchResultType.LINEAR,
+            title="[DEV-123] Fix authentication bug",
+            url="https://linear.app/team/issue/DEV-123",
+            snippet="Users are unable to login when using SSO",
+            author="John Doe",
+        ),
+    ]
 
 
 @pytest.fixture
-def mock_linear_response() -> dict[str, Any]:
-    """Sample Linear GraphQL response."""
-    return {
-        "data": {
-            "searchIssues": {
-                "nodes": [
-                    {
-                        "id": "issue-1",
-                        "identifier": "DEV-123",
-                        "title": "Fix authentication bug",
-                        "description": "Users are unable to login when using SSO",
-                        "url": "https://linear.app/team/issue/DEV-123",
-                        "state": {"name": "In Progress"},
-                        "assignee": {"name": "John Doe"},
-                        "createdAt": "2024-01-15T10:00:00Z",
-                    },
-                    {
-                        "id": "issue-2",
-                        "identifier": "DEV-456",
-                        "title": "Add search feature",
-                        "description": None,
-                        "url": "https://linear.app/team/issue/DEV-456",
-                        "state": {"name": "Todo"},
-                        "assignee": None,
-                        "createdAt": "2024-01-16T11:00:00Z",
-                    },
-                ]
-            }
+def mock_mcp_client() -> MagicMock:
+    """Mock MCPSearchClient."""
+    mock = MagicMock()
+    mock.search = AsyncMock(return_value=[])
+    mock.connect_all = AsyncMock()
+    mock.disconnect_all = AsyncMock()
+    return mock
+
+
+@pytest.fixture
+def mock_mcp_tool_result_slack() -> dict[str, Any]:
+    """Sample MCP tool result for Slack search."""
+    slack_data = [
+        {
+            "permalink": "https://workspace.slack.com/archives/C123/p123",
+            "text": "Test message",
+            "username": "testuser",
+            "ts": "1234567890",
+            "channel": {"name": "general"},
         }
-    }
+    ]
+    return {"content": [{"type": "text", "text": json.dumps(slack_data)}]}
 
 
 @pytest.fixture
-def mock_slack_client() -> Generator[MagicMock, None, None]:
-    """Mock Slack WebClient."""
-    with patch("eagleeye.integrations.slack_search.WebClient") as mock:
-        yield mock
+def mock_mcp_tool_result_notion() -> dict[str, Any]:
+    """Sample MCP tool result for Notion search."""
+    notion_data = [
+        {
+            "title": "Test Page",
+            "url": "https://notion.so/page-123",
+            "description": "Page description",
+        }
+    ]
+    return {"content": [{"type": "text", "text": json.dumps(notion_data)}]}
 
 
 @pytest.fixture
-def mock_notion_client() -> Generator[MagicMock, None, None]:
-    """Mock Notion Client."""
-    with patch("eagleeye.integrations.notion.Client") as mock:
-        yield mock
-
-
-@pytest.fixture
-def mock_httpx_client() -> Generator[MagicMock, None, None]:
-    """Mock httpx Client for Linear."""
-    with patch("eagleeye.integrations.linear.httpx.Client") as mock:
-        yield mock
+def mock_mcp_tool_result_linear() -> dict[str, Any]:
+    """Sample MCP tool result for Linear search."""
+    linear_data = [
+        {
+            "identifier": "DEV-123",
+            "title": "Fix bug",
+            "url": "https://linear.app/issue/DEV-123",
+            "description": "Bug description",
+            "assignee": {"name": "Developer"},
+        }
+    ]
+    return {"content": [{"type": "text", "text": json.dumps(linear_data)}]}

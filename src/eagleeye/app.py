@@ -1,7 +1,7 @@
-"""Main Slack bot application."""
+"""Main Slack bot application using MCP for unified search."""
 
+import asyncio
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,10 +9,9 @@ from slack_bolt import Ack, App, Respond, Say
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from eagleeye.config import Settings
-from eagleeye.integrations.linear import LinearClient
-from eagleeye.integrations.notion import NotionSearchClient
-from eagleeye.integrations.slack_search import SlackSearchClient
 from eagleeye.logging import get_logger
+from eagleeye.mcp.client import MCPSearchClient
+from eagleeye.mcp.servers import MCPServerConfig
 from eagleeye.models.search import SearchResult
 
 logger = get_logger(__name__)
@@ -30,7 +29,7 @@ class ParsedQuery:
 
 
 class EagleEyeBot:
-    """Unified search Slack bot."""
+    """Unified search Slack bot using MCP."""
 
     def __init__(self, settings: Settings) -> None:
         """Initialize bot with settings."""
@@ -42,13 +41,29 @@ class EagleEyeBot:
             signing_secret=settings.slack_signing_secret,
         )
 
-        # Initialize search clients
-        self.slack_client = SlackSearchClient(settings.slack_bot_token)
-        self.notion_client = NotionSearchClient(settings.notion_api_key)
-        self.linear_client = LinearClient(settings.linear_api_key)
+        # Initialize MCP search client
+        self.mcp_client = self._create_mcp_client()
+
+        # Event loop for async operations
+        self._loop: asyncio.AbstractEventLoop | None = None
 
         # Register handlers
         self._register_handlers()
+
+    def _create_mcp_client(self) -> MCPSearchClient:
+        """Create MCP search client with configured servers."""
+        configs: list[MCPServerConfig] = []
+
+        if self.settings.enable_slack_mcp:
+            configs.append(MCPServerConfig.slack(self.settings.slack_bot_token))
+
+        if self.settings.enable_notion_mcp:
+            configs.append(MCPServerConfig.notion(self.settings.notion_api_key))
+
+        if self.settings.enable_linear_mcp:
+            configs.append(MCPServerConfig.linear(self.settings.linear_api_key))
+
+        return MCPSearchClient(configs)
 
     @staticmethod
     def parse_query(text: str) -> ParsedQuery:
@@ -104,7 +119,7 @@ class EagleEyeBot:
             )
             respond(f":mag: Searching for *{parsed.query}*{source_hint}...")
 
-            results = self._unified_search(parsed.query, sources=parsed.sources)
+            results = self._run_async_search(parsed.query, sources=parsed.sources)
 
             if not results:
                 respond(f"No results found for *{parsed.query}*")
@@ -138,7 +153,7 @@ class EagleEyeBot:
             )
             say(f":mag: Searching for *{parsed.query}*{source_hint}...")
 
-            results = self._unified_search(parsed.query, sources=parsed.sources)
+            results = self._run_async_search(parsed.query, sources=parsed.sources)
 
             if not results:
                 say(f"No results found for *{parsed.query}*")
@@ -147,51 +162,23 @@ class EagleEyeBot:
             blocks = self._format_results_as_blocks(parsed.query, results)
             say(blocks=blocks)
 
-    def _unified_search(
+    def _run_async_search(
         self,
         query: str,
-        limit: int = 3,
         sources: set[str] | None = None,
+        limit: int = 3,
     ) -> list[SearchResult]:
-        """Search across all integrations in parallel.
+        """Run async MCP search in a thread-safe way."""
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
 
-        Args:
-            query: Search query string
-            limit: Maximum results per source
-            sources: Set of sources to search (empty/None = all)
-        """
-        results: list[SearchResult] = []
-
-        # Build list of search tasks based on filters
-        search_tasks: dict[str, tuple[Any, str]] = {}
-        active_sources = sources if sources else {"slack", "notion", "linear"}
-
-        if "slack" in active_sources:
-            search_tasks["slack"] = (self.slack_client, "slack")
-        if "notion" in active_sources:
-            search_tasks["notion"] = (self.notion_client, "notion")
-        if "linear" in active_sources:
-            search_tasks["linear"] = (self.linear_client, "linear")
-
-        if not search_tasks:
-            return results
-
-        with ThreadPoolExecutor(max_workers=len(search_tasks)) as executor:
-            futures = {
-                executor.submit(client.search, query, limit): source_name
-                for source_name, (client, source_name) in search_tasks.items()
-            }
-
-            for future in as_completed(futures):
-                try:
-                    results.extend(future.result())
-                except Exception as e:
-                    source = futures[future]
-                    logger.error(
-                        "search_failed", source=source, error=str(e), query=query
-                    )
-
-        return results
+        try:
+            return self._loop.run_until_complete(
+                self.mcp_client.search(query, sources=sources, limit=limit)
+            )
+        except Exception as e:
+            logger.error("search_failed", error=str(e), query=query)
+            return []
 
     def _format_results_as_blocks(
         self, query: str, results: list[SearchResult]
@@ -238,5 +225,12 @@ class EagleEyeBot:
     def start(self) -> None:
         """Start the bot using Socket Mode."""
         handler = SocketModeHandler(self.app, self.settings.slack_app_token)
-        logger.info("bot_started", message="EagleEye bot is running")
+        logger.info("bot_started", message="EagleEye bot is running (MCP mode)")
         handler.start()  # type: ignore[no-untyped-call]
+
+    async def cleanup(self) -> None:
+        """Cleanup MCP connections."""
+        await self.mcp_client.disconnect_all()
+        if self._loop:
+            self._loop.close()
+            self._loop = None
