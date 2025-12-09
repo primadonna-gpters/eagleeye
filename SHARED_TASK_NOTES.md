@@ -2,81 +2,43 @@
 
 ## Current Status
 
-MCP 기반으로 재구성 완료. 기존 API 클라이언트 제거하고 MCP (Model Context Protocol)를 통한 통합 검색으로 전환.
+MCP 기반으로 재구성 완료. 올바른 npm 패키지명과 tool name으로 검증됨.
 
-- 단위 테스트 58개 (모든 코어 모듈 커버)
+- 단위 테스트 65개 (모든 코어 모듈 커버)
 - mypy strict 모드 통과
 - ruff 린팅 통과
 
-## Architecture Change (v0.2.0)
+## MCP Server Configuration (검증됨)
 
-**이전 (API 방식)**:
-- `slack-sdk` → Slack API 직접 호출
-- `notion-client` → Notion API 직접 호출
-- `httpx` → Linear GraphQL API 직접 호출
+| 서버 | NPM 패키지 | Tool Name | 환경 변수 |
+|------|-----------|-----------|----------|
+| Slack | `@modelcontextprotocol/server-slack` | `slack_get_channel_history`* | `SLACK_BOT_TOKEN`, `SLACK_TEAM_ID` |
+| Notion | `@notionhq/notion-mcp-server` | `notion_search` | `NOTION_TOKEN` |
+| Linear | `linear-mcp-server` | `linear_search_issues` | `LINEAR_API_KEY` |
 
-**현재 (MCP 방식)**:
-- `mcp` SDK → 표준화된 MCP 서버 연결
-- Slack, Notion, Linear 각각 MCP 서버로 연결
-- stdio transport 사용
+\* Slack MCP 서버에는 검색 도구가 없음. `slack_list_channels` + `slack_get_channel_history` 조합 후 클라이언트 필터링으로 구현.
 
-## Project Structure
+## Slack 검색 구현 방식
 
-```
-src/eagleeye/
-├── app.py              # 메인 Slack 봇 (MCP 기반 검색)
-├── config.py           # pydantic-settings 기반 설정
-├── logging.py          # structlog 설정
-├── mcp/                # MCP 클라이언트 모듈 (신규)
-│   ├── __init__.py
-│   ├── client.py       # MCPSearchClient, MCPConnection
-│   └── servers.py      # MCPServerConfig, ServerType
-├── integrations/       # (기존 API 클라이언트 제거됨)
-│   └── __init__.py
-└── models/
-    └── search.py       # 통합 SearchResult 모델
+공식 `@modelcontextprotocol/server-slack`에는 `search_messages` 도구가 없음:
+1. `slack_list_channels`로 채널 목록 조회
+2. 각 채널에서 `slack_get_channel_history`로 최근 메시지 조회
+3. 클라이언트에서 쿼리 문자열로 필터링
 
-tests/
-├── conftest.py         # pytest fixtures
-├── test_app.py         # EagleEyeBot 테스트 (24개)
-├── test_mcp.py         # MCP 클라이언트 테스트 (26개, 신규)
-└── test_models.py      # SearchResult 모델 테스트 (8개)
-```
-
-## MCP Server Configuration
-
-앱은 다음 MCP 서버들에 연결:
-
-| 서버 | NPM 패키지 | 환경 변수 |
-|------|-----------|----------|
-| Slack | `@anthropic-ai/mcp-server-slack` | `SLACK_BOT_TOKEN` |
-| Notion | `@notionhq/notion-mcp-server` | `NOTION_API_KEY` |
-| Linear | `mcp-server-linear` | `LINEAR_API_KEY` |
-
-MCP 서버 활성화/비활성화는 환경 변수로 제어:
-- `ENABLE_SLACK_MCP=true/false`
-- `ENABLE_NOTION_MCP=true/false`
-- `ENABLE_LINEAR_MCP=true/false`
-
-## Search Filter Feature
-
-```bash
-/search --slack api error          # Slack만 검색
-/search --notion documentation     # Notion만 검색
-/search --linear bug               # Linear만 검색
-/search --slack --notion api       # Slack + Notion 검색
-/search api error                  # 전체 검색 (기본값)
-```
+제한사항:
+- 최근 메시지만 검색 가능 (전체 검색 불가)
+- 채널 5개, 메시지 20개씩 조회 후 필터링
 
 ## Next Steps
 
-1. **MCP 서버 npm 패키지 검증**
-   - 각 MCP 서버 패키지가 실제로 존재하고 작동하는지 확인
-   - tool name 매핑이 올바른지 확인 (`search_messages`, `notion_search`, `search_issues`)
-
-2. **E2E 통합 테스트**
+1. **E2E 통합 테스트**
    - 실제 MCP 서버 연결 테스트
    - Node.js/npx 환경 필요
+   - `.env` 설정 후 `python -m eagleeye` 실행
+
+2. **Slack 검색 개선 옵션**
+   - 커뮤니티 MCP 서버 (`slack-mcp-server`) 사용 고려 - 실제 검색 API 지원
+   - 또는 Slack SDK 직접 사용 fallback 구현
 
 3. **에러 처리 강화**
    - MCP 서버 연결 실패 시 폴백 처리
@@ -96,23 +58,6 @@ cp .env.example .env
 python -m eagleeye
 ```
 
-## Test Commands
-
-```bash
-pytest tests/ -v                    # 모든 테스트
-pytest tests/test_app.py -v         # EagleEyeBot 테스트
-pytest tests/test_mcp.py -v         # MCP 클라이언트 테스트
-pytest tests/test_models.py -v      # 모델 테스트
-```
-
-## Code Quality
-
-```bash
-mypy src/                           # 타입 체크
-ruff check src/ tests/              # 린팅
-ruff format src/ tests/             # 포맷팅
-```
-
 ## Required Environment Variables
 
 | 변수 | 설명 |
@@ -120,14 +65,13 @@ ruff format src/ tests/             # 포맷팅
 | `SLACK_BOT_TOKEN` | Slack Bot Token (xoxb-...) |
 | `SLACK_APP_TOKEN` | Slack App Token for Socket Mode (xapp-...) |
 | `SLACK_SIGNING_SECRET` | Slack Signing Secret |
-| `NOTION_API_KEY` | Notion Integration Token |
+| `NOTION_TOKEN` | Notion Integration Token |
 | `LINEAR_API_KEY` | Linear API Key |
 
-## Dependencies Changed
+## Test Commands
 
-**추가됨**:
-- `mcp>=1.0.0` - MCP Python SDK
-
-**제거됨**:
-- `notion-client` - (MCP 서버가 대체)
-- `httpx` - (MCP 서버가 대체, Slack SDK가 내부적으로 사용)
+```bash
+pytest tests/ -v                    # 모든 테스트 (65개)
+mypy src/                           # 타입 체크
+ruff check src/ tests/              # 린팅
+```

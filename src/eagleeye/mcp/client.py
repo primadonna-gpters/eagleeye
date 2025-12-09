@@ -1,6 +1,7 @@
 """MCP client for connecting to and interacting with MCP servers."""
 
 import asyncio
+import json
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -18,6 +19,10 @@ from eagleeye.mcp.servers import (
 from eagleeye.models.search import SearchResult, SearchResultType
 
 logger = get_logger(__name__)
+
+# Slack MCP tool names
+SLACK_LIST_CHANNELS = "slack_list_channels"
+SLACK_GET_CHANNEL_HISTORY = "slack_get_channel_history"
 
 
 class MCPConnection:
@@ -177,6 +182,10 @@ class MCPSearchClient:
         if not connection or not connection.session:
             return []
 
+        # Slack requires special handling since it doesn't have a search tool
+        if server_type == ServerType.SLACK:
+            return await self._search_slack(connection, query, limit)
+
         tool_name = SEARCH_TOOL_NAMES.get(server_type)
         if not tool_name:
             logger.warning("no_search_tool", server_type=server_type.value)
@@ -186,7 +195,7 @@ class MCPSearchClient:
 
         try:
             result = await connection.call_tool(tool_name, arguments)
-            return self._parse_results(server_type, result)
+            return self._parse_results(server_type, result, query)
         except Exception as e:
             logger.error(
                 "tool_call_failed",
@@ -196,8 +205,108 @@ class MCPSearchClient:
             )
             return []
 
+    async def _search_slack(
+        self, connection: MCPConnection, query: str, limit: int
+    ) -> list[SearchResult]:
+        """Search Slack by fetching channel history and filtering.
+
+        The official Slack MCP server doesn't have a search tool,
+        so we list channels and fetch history, then filter client-side.
+        """
+        results: list[SearchResult] = []
+        query_lower = query.lower()
+
+        try:
+            # Get list of channels
+            channels_result = await connection.call_tool(
+                SLACK_LIST_CHANNELS, {"limit": 10}
+            )
+            channels = self._parse_slack_channels(channels_result)
+
+            # Fetch history from each channel and filter
+            for channel in channels[:5]:  # Limit to 5 channels
+                try:
+                    history_result = await connection.call_tool(
+                        SLACK_GET_CHANNEL_HISTORY,
+                        {"channel_id": channel["id"], "limit": 20},
+                    )
+                    channel_results = self._parse_slack_history(
+                        history_result, channel, query_lower
+                    )
+                    results.extend(channel_results)
+
+                    if len(results) >= limit:
+                        break
+                except Exception as e:
+                    logger.warning(
+                        "slack_channel_history_failed",
+                        channel_id=channel.get("id"),
+                        error=str(e),
+                    )
+
+        except Exception as e:
+            logger.error("slack_search_failed", error=str(e))
+
+        return results[:limit]
+
+    def _parse_slack_channels(self, result: CallToolResult) -> list[dict[str, Any]]:
+        """Parse Slack channels from MCP result."""
+        channels: list[dict[str, Any]] = []
+
+        for content in result.content:
+            if isinstance(content, TextContent):
+                try:
+                    data = json.loads(content.text)
+                    if isinstance(data, list):
+                        channels.extend(data)
+                    elif isinstance(data, dict):
+                        channels.extend(data.get("channels", []))
+                except json.JSONDecodeError:
+                    pass
+
+        return channels
+
+    def _parse_slack_history(
+        self,
+        result: CallToolResult,
+        channel: dict[str, Any],
+        query_lower: str,
+    ) -> list[SearchResult]:
+        """Parse Slack history and filter by query."""
+        results: list[SearchResult] = []
+        channel_name = channel.get("name", "unknown")
+
+        for content in result.content:
+            if isinstance(content, TextContent):
+                try:
+                    data = json.loads(content.text)
+                    messages = (
+                        data if isinstance(data, list) else data.get("messages", [])
+                    )
+
+                    for msg in messages:
+                        text = msg.get("text", "")
+                        if query_lower in text.lower():
+                            results.append(
+                                SearchResult(
+                                    source=SearchResultType.SLACK,
+                                    title=f"#{channel_name}",
+                                    url=msg.get("permalink", ""),
+                                    snippet=text[:200],
+                                    author=msg.get("user"),
+                                    timestamp=msg.get("ts"),
+                                )
+                            )
+                except json.JSONDecodeError:
+                    pass
+
+        return results
+
     def _parse_results(
-        self, server_type: ServerType, result: CallToolResult
+        self,
+        server_type: ServerType,
+        result: CallToolResult,
+        query: str = "",
     ) -> list[SearchResult]:
         """Parse MCP tool results into SearchResult objects."""
         results: list[SearchResult] = []
@@ -205,9 +314,6 @@ class MCPSearchClient:
 
         for content in result.content:
             if isinstance(content, TextContent):
-                # Parse text content - typically JSON
-                import json
-
                 try:
                     data = json.loads(content.text)
                     if isinstance(data, list):
