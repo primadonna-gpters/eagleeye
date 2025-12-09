@@ -1,10 +1,10 @@
-"""Tests for EagleEye Slack bot application."""
+"""Tests for EagleEye Slack bot application (MCP-based)."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from eagleeye.app import EagleEyeBot
+from eagleeye.app import EagleEyeBot, ParsedQuery
 from eagleeye.config import Settings
 from eagleeye.models.search import SearchResult, SearchResultType
 
@@ -54,278 +54,24 @@ class TestEagleEyeBotInit:
     def test_init_creates_app(self, mock_settings: Settings) -> None:
         """Test that bot initializes Slack app correctly."""
         with patch("eagleeye.app.App") as mock_app_class:
-            with patch("eagleeye.app.SlackSearchClient"):
-                with patch("eagleeye.app.NotionSearchClient"):
-                    with patch("eagleeye.app.LinearClient"):
-                        bot = EagleEyeBot(mock_settings)
+            with patch("eagleeye.app.MCPSearchClient"):
+                bot = EagleEyeBot(mock_settings)
 
-                        mock_app_class.assert_called_once_with(
-                            token="xoxb-test-token",
-                            signing_secret="test-signing-secret",
-                        )
-                        assert bot.settings == mock_settings
+                mock_app_class.assert_called_once_with(
+                    token="xoxb-test-token",
+                    signing_secret="test-signing-secret",
+                )
+                assert bot.settings == mock_settings
 
-    def test_init_creates_search_clients(self, mock_settings: Settings) -> None:
-        """Test that bot initializes all search clients."""
+    def test_init_creates_mcp_client(self, mock_settings: Settings) -> None:
+        """Test that bot initializes MCP search client."""
         with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        EagleEyeBot(mock_settings)
+            with patch("eagleeye.app.MCPSearchClient") as mock_mcp:
+                bot = EagleEyeBot(mock_settings)
 
-                        mock_slack.assert_called_once_with("xoxb-test-token")
-                        mock_notion.assert_called_once_with("secret_test_notion_key")
-                        mock_linear.assert_called_once_with("lin_api_test_key")
-
-
-class TestUnifiedSearch:
-    """Tests for unified search functionality."""
-
-    def test_unified_search_combines_results(
-        self, mock_settings: Settings, sample_search_results: list[SearchResult]
-    ) -> None:
-        """Test that unified search combines results from all sources."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        # Setup mock returns
-                        mock_slack.return_value.search.return_value = [
-                            sample_search_results[0]
-                        ]
-                        mock_notion.return_value.search.return_value = [
-                            sample_search_results[1]
-                        ]
-                        mock_linear.return_value.search.return_value = [
-                            sample_search_results[2]
-                        ]
-
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("test query")
-
-                        assert len(results) == 3
-                        sources = {r.source for r in results}
-                        assert sources == {
-                            SearchResultType.SLACK,
-                            SearchResultType.NOTION,
-                            SearchResultType.LINEAR,
-                        }
-
-    def test_unified_search_handles_empty_results(
-        self, mock_settings: Settings
-    ) -> None:
-        """Test unified search when no results are found."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = []
-                        mock_notion.return_value.search.return_value = []
-                        mock_linear.return_value.search.return_value = []
-
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("nonexistent query")
-
-                        assert results == []
-
-    def test_unified_search_handles_partial_failure(
-        self, mock_settings: Settings, sample_search_results: list[SearchResult]
-    ) -> None:
-        """Test unified search continues when one source fails."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = [
-                            sample_search_results[0]
-                        ]
-                        mock_notion.return_value.search.side_effect = Exception(
-                            "API Error"
-                        )
-                        mock_linear.return_value.search.return_value = [
-                            sample_search_results[2]
-                        ]
-
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("test query")
-
-                        # Should still get results from Slack and Linear
-                        assert len(results) == 2
-                        sources = {r.source for r in results}
-                        assert SearchResultType.SLACK in sources
-                        assert SearchResultType.LINEAR in sources
-                        assert SearchResultType.NOTION not in sources
-
-    def test_unified_search_respects_limit(self, mock_settings: Settings) -> None:
-        """Test that limit is passed to search clients."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = []
-                        mock_notion.return_value.search.return_value = []
-                        mock_linear.return_value.search.return_value = []
-
-                        bot = EagleEyeBot(mock_settings)
-                        bot._unified_search("test", limit=5)
-
-                        mock_slack.return_value.search.assert_called_once_with(
-                            "test", 5
-                        )
-                        mock_notion.return_value.search.assert_called_once_with(
-                            "test", 5
-                        )
-                        mock_linear.return_value.search.assert_called_once_with(
-                            "test", 5
-                        )
-
-
-class TestFormatResults:
-    """Tests for result formatting."""
-
-    def test_format_results_creates_header(
-        self, mock_settings: Settings, sample_search_results: list[SearchResult]
-    ) -> None:
-        """Test that formatted results include header."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient"):
-                with patch("eagleeye.app.NotionSearchClient"):
-                    with patch("eagleeye.app.LinearClient"):
-                        bot = EagleEyeBot(mock_settings)
-                        blocks = bot._format_results_as_blocks(
-                            "test query", sample_search_results
-                        )
-
-                        # First block should be header
-                        assert blocks[0]["type"] == "header"
-                        assert (
-                            blocks[0]["text"]["text"]
-                            == "Search results for: test query"
-                        )
-
-    def test_format_results_groups_by_source(
-        self, mock_settings: Settings, sample_search_results: list[SearchResult]
-    ) -> None:
-        """Test that results are grouped by source."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient"):
-                with patch("eagleeye.app.NotionSearchClient"):
-                    with patch("eagleeye.app.LinearClient"):
-                        bot = EagleEyeBot(mock_settings)
-                        blocks = bot._format_results_as_blocks(
-                            "test", sample_search_results
-                        )
-
-                        # Find section headers (source groupings)
-                        section_texts = [
-                            b["text"]["text"]
-                            for b in blocks
-                            if b["type"] == "section"
-                            and "text" in b
-                            and "*" in b["text"].get("text", "")
-                        ]
-
-                        # Should have headers for each source
-                        assert any("Slack" in t for t in section_texts)
-                        assert any("Notion" in t for t in section_texts)
-                        assert any("Linear" in t for t in section_texts)
-
-    def test_format_results_includes_dividers(
-        self, mock_settings: Settings, sample_search_results: list[SearchResult]
-    ) -> None:
-        """Test that dividers are included between sections."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient"):
-                with patch("eagleeye.app.NotionSearchClient"):
-                    with patch("eagleeye.app.LinearClient"):
-                        bot = EagleEyeBot(mock_settings)
-                        blocks = bot._format_results_as_blocks(
-                            "test", sample_search_results
-                        )
-
-                        divider_count = sum(1 for b in blocks if b["type"] == "divider")
-                        # At least one divider after header + one per source
-                        assert divider_count >= 2
-
-
-class TestSearchCommandHandler:
-    """Tests for /search slash command handler."""
-
-    def test_search_command_empty_query_returns_empty_results(
-        self, mock_settings: Settings
-    ) -> None:
-        """Test that empty/whitespace query returns empty results."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = []
-                        mock_notion.return_value.search.return_value = []
-                        mock_linear.return_value.search.return_value = []
-
-                        bot = EagleEyeBot(mock_settings)
-                        # Empty query search should return empty results
-                        results = bot._unified_search("   ")
-
-                        assert results == []
-
-    def test_search_command_with_query_calls_unified_search(
-        self, mock_settings: Settings, sample_search_results: list[SearchResult]
-    ) -> None:
-        """Test /search with query performs unified search."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = [
-                            sample_search_results[0]
-                        ]
-                        mock_notion.return_value.search.return_value = []
-                        mock_linear.return_value.search.return_value = []
-
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("test query")
-
-                        assert len(results) == 1
-                        mock_slack.return_value.search.assert_called_once()
-
-
-class TestMentionHandler:
-    """Tests for @mention event handler."""
-
-    def test_mention_handler_extracts_query_from_text(self) -> None:
-        """Test that mention handler correctly extracts query after bot mention."""
-        # Test query extraction logic used in handler
-        text = "<@U123BOT> search for this"
-        query = " ".join(text.split()[1:]).strip()
-
-        assert query == "search for this"
-
-    def test_mention_handler_handles_empty_query(self) -> None:
-        """Test that mention with only bot mention has empty query."""
-        text = "<@U123BOT>"
-        query = " ".join(text.split()[1:]).strip()
-
-        assert query == ""
-
-
-class TestBotStart:
-    """Tests for bot start functionality."""
-
-    def test_start_uses_socket_mode(self, mock_settings: Settings) -> None:
-        """Test that start() uses SocketModeHandler."""
-        with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient"):
-                with patch("eagleeye.app.NotionSearchClient"):
-                    with patch("eagleeye.app.LinearClient"):
-                        with patch("eagleeye.app.SocketModeHandler") as mock_handler:
-                            bot = EagleEyeBot(mock_settings)
-                            bot.start()
-
-                            mock_handler.assert_called_once_with(
-                                bot.app, "xapp-test-token"
-                            )
-                            mock_handler.return_value.start.assert_called_once()
+                # MCPSearchClient should be called with a list of configs
+                mock_mcp.assert_called_once()
+                assert bot.mcp_client is not None
 
 
 class TestParseQuery:
@@ -409,133 +155,158 @@ class TestParseQuery:
         assert result.sources == {"slack"}
 
 
-class TestUnifiedSearchWithFilters:
-    """Tests for unified search with source filters."""
+class TestAsyncSearch:
+    """Tests for async search via MCP."""
 
-    def test_unified_search_filters_to_slack_only(
+    def test_run_async_search_calls_mcp_client(
         self, mock_settings: Settings, sample_search_results: list[SearchResult]
     ) -> None:
-        """Test unified search with only slack filter."""
+        """Test that _run_async_search calls MCP client."""
         with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = [
-                            sample_search_results[0]
-                        ]
-                        mock_notion.return_value.search.return_value = [
-                            sample_search_results[1]
-                        ]
-                        mock_linear.return_value.search.return_value = [
-                            sample_search_results[2]
-                        ]
+            with patch("eagleeye.app.MCPSearchClient") as mock_mcp_class:
+                mock_client = MagicMock()
+                mock_client.search = AsyncMock(return_value=sample_search_results)
+                mock_mcp_class.return_value = mock_client
 
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("test", sources={"slack"})
+                bot = EagleEyeBot(mock_settings)
+                results = bot._run_async_search("test query")
 
-                        assert len(results) == 1
-                        assert results[0].source == SearchResultType.SLACK
-                        mock_slack.return_value.search.assert_called_once()
-                        mock_notion.return_value.search.assert_not_called()
-                        mock_linear.return_value.search.assert_not_called()
+                assert len(results) == 3
+                mock_client.search.assert_called_once()
 
-    def test_unified_search_filters_to_notion_only(
+    def test_run_async_search_passes_sources_filter(
+        self, mock_settings: Settings
+    ) -> None:
+        """Test that sources filter is passed to MCP client."""
+        with patch("eagleeye.app.App"):
+            with patch("eagleeye.app.MCPSearchClient") as mock_mcp_class:
+                mock_client = MagicMock()
+                mock_client.search = AsyncMock(return_value=[])
+                mock_mcp_class.return_value = mock_client
+
+                bot = EagleEyeBot(mock_settings)
+                bot._run_async_search("test", sources={"slack", "notion"})
+
+                # Verify search was called with sources filter
+                call_args = mock_client.search.call_args
+                assert call_args.kwargs.get("sources") == {"slack", "notion"}
+
+    def test_run_async_search_handles_error(self, mock_settings: Settings) -> None:
+        """Test that search errors are handled gracefully."""
+        with patch("eagleeye.app.App"):
+            with patch("eagleeye.app.MCPSearchClient") as mock_mcp_class:
+                mock_client = MagicMock()
+                mock_client.search = AsyncMock(side_effect=Exception("MCP error"))
+                mock_mcp_class.return_value = mock_client
+
+                bot = EagleEyeBot(mock_settings)
+                results = bot._run_async_search("test query")
+
+                assert results == []
+
+
+class TestFormatResults:
+    """Tests for result formatting."""
+
+    def test_format_results_creates_header(
         self, mock_settings: Settings, sample_search_results: list[SearchResult]
     ) -> None:
-        """Test unified search with only notion filter."""
+        """Test that formatted results include header."""
         with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_notion.return_value.search.return_value = [
-                            sample_search_results[1]
-                        ]
+            with patch("eagleeye.app.MCPSearchClient"):
+                bot = EagleEyeBot(mock_settings)
+                blocks = bot._format_results_as_blocks(
+                    "test query", sample_search_results
+                )
 
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("test", sources={"notion"})
+                # First block should be header
+                assert blocks[0]["type"] == "header"
+                assert blocks[0]["text"]["text"] == "Search results for: test query"
 
-                        assert len(results) == 1
-                        assert results[0].source == SearchResultType.NOTION
-                        mock_slack.return_value.search.assert_not_called()
-                        mock_notion.return_value.search.assert_called_once()
-                        mock_linear.return_value.search.assert_not_called()
-
-    def test_unified_search_filters_to_multiple_sources(
+    def test_format_results_groups_by_source(
         self, mock_settings: Settings, sample_search_results: list[SearchResult]
     ) -> None:
-        """Test unified search with multiple source filters."""
+        """Test that results are grouped by source."""
         with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = [
-                            sample_search_results[0]
-                        ]
-                        mock_linear.return_value.search.return_value = [
-                            sample_search_results[2]
-                        ]
+            with patch("eagleeye.app.MCPSearchClient"):
+                bot = EagleEyeBot(mock_settings)
+                blocks = bot._format_results_as_blocks("test", sample_search_results)
 
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search(
-                            "test", sources={"slack", "linear"}
-                        )
+                # Find section headers (source groupings)
+                section_texts = [
+                    b["text"]["text"]
+                    for b in blocks
+                    if b["type"] == "section"
+                    and "text" in b
+                    and "*" in b["text"].get("text", "")
+                ]
 
-                        assert len(results) == 2
-                        sources = {r.source for r in results}
-                        assert SearchResultType.SLACK in sources
-                        assert SearchResultType.LINEAR in sources
-                        mock_slack.return_value.search.assert_called_once()
-                        mock_notion.return_value.search.assert_not_called()
-                        mock_linear.return_value.search.assert_called_once()
+                # Should have headers for each source
+                assert any("Slack" in t for t in section_texts)
+                assert any("Notion" in t for t in section_texts)
+                assert any("Linear" in t for t in section_texts)
 
-    def test_unified_search_empty_sources_searches_all(
+    def test_format_results_includes_dividers(
         self, mock_settings: Settings, sample_search_results: list[SearchResult]
     ) -> None:
-        """Test unified search with empty sources set searches all."""
+        """Test that dividers are included between sections."""
         with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = [
-                            sample_search_results[0]
-                        ]
-                        mock_notion.return_value.search.return_value = [
-                            sample_search_results[1]
-                        ]
-                        mock_linear.return_value.search.return_value = [
-                            sample_search_results[2]
-                        ]
+            with patch("eagleeye.app.MCPSearchClient"):
+                bot = EagleEyeBot(mock_settings)
+                blocks = bot._format_results_as_blocks("test", sample_search_results)
 
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("test", sources=set())
+                divider_count = sum(1 for b in blocks if b["type"] == "divider")
+                # At least one divider after header + one per source
+                assert divider_count >= 2
 
-                        assert len(results) == 3
-                        mock_slack.return_value.search.assert_called_once()
-                        mock_notion.return_value.search.assert_called_once()
-                        mock_linear.return_value.search.assert_called_once()
 
-    def test_unified_search_none_sources_searches_all(
-        self, mock_settings: Settings, sample_search_results: list[SearchResult]
-    ) -> None:
-        """Test unified search with None sources searches all."""
+class TestMentionHandler:
+    """Tests for @mention event handler."""
+
+    def test_mention_handler_extracts_query_from_text(self) -> None:
+        """Test that mention handler correctly extracts query after bot mention."""
+        # Test query extraction logic used in handler
+        text = "<@U123BOT> search for this"
+        query = " ".join(text.split()[1:]).strip()
+
+        assert query == "search for this"
+
+    def test_mention_handler_handles_empty_query(self) -> None:
+        """Test that mention with only bot mention has empty query."""
+        text = "<@U123BOT>"
+        query = " ".join(text.split()[1:]).strip()
+
+        assert query == ""
+
+
+class TestBotStart:
+    """Tests for bot start functionality."""
+
+    def test_start_uses_socket_mode(self, mock_settings: Settings) -> None:
+        """Test that start() uses SocketModeHandler."""
         with patch("eagleeye.app.App"):
-            with patch("eagleeye.app.SlackSearchClient") as mock_slack:
-                with patch("eagleeye.app.NotionSearchClient") as mock_notion:
-                    with patch("eagleeye.app.LinearClient") as mock_linear:
-                        mock_slack.return_value.search.return_value = [
-                            sample_search_results[0]
-                        ]
-                        mock_notion.return_value.search.return_value = [
-                            sample_search_results[1]
-                        ]
-                        mock_linear.return_value.search.return_value = [
-                            sample_search_results[2]
-                        ]
+            with patch("eagleeye.app.MCPSearchClient"):
+                with patch("eagleeye.app.SocketModeHandler") as mock_handler:
+                    bot = EagleEyeBot(mock_settings)
+                    bot.start()
 
-                        bot = EagleEyeBot(mock_settings)
-                        results = bot._unified_search("test", sources=None)
+                    mock_handler.assert_called_once_with(bot.app, "xapp-test-token")
+                    mock_handler.return_value.start.assert_called_once()
 
-                        assert len(results) == 3
-                        mock_slack.return_value.search.assert_called_once()
-                        mock_notion.return_value.search.assert_called_once()
-                        mock_linear.return_value.search.assert_called_once()
+
+class TestParsedQuery:
+    """Tests for ParsedQuery dataclass."""
+
+    def test_parsed_query_with_sources(self) -> None:
+        """Test ParsedQuery with sources."""
+        pq = ParsedQuery(query="test query", sources={"slack", "notion"})
+
+        assert pq.query == "test query"
+        assert pq.sources == {"slack", "notion"}
+
+    def test_parsed_query_empty_sources(self) -> None:
+        """Test ParsedQuery with empty sources."""
+        pq = ParsedQuery(query="test", sources=set())
+
+        assert pq.query == "test"
+        assert pq.sources == set()

@@ -1,7 +1,5 @@
-"""Integration modules for external services."""
+"""Integration modules - Now using MCP.
 
-from eagleeye.integrations.linear import LinearClient
-from eagleeye.integrations.notion import NotionSearchClient
-from eagleeye.integrations.slack_search import SlackSearchClient
-
-__all__ = ["LinearClient", "NotionSearchClient", "SlackSearchClient"]
+Legacy API clients have been removed in favor of MCP servers.
+See eagleeye.mcp module for the new implementation.
+"""
