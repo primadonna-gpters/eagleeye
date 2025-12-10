@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from eagleeye.models.search import SearchResult, SearchResultType
+from models.search import SearchResult, SearchResultType
 
 
 @pytest.fixture

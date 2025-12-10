@@ -9,14 +9,14 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import CallToolResult, TextContent
 
-from eagleeye.logging import get_logger
-from eagleeye.mcp.servers import (
+from log_config import get_logger
+from mcp_integration.servers import (
     SEARCH_TOOL_NAMES,
     MCPServerConfig,
     ServerType,
     get_search_tool_arguments,
 )
-from eagleeye.models.search import SearchResult, SearchResultType
+from models.search import SearchResult, SearchResultType
 
 logger = get_logger(__name__)
 
@@ -104,6 +104,14 @@ class MCPSearchClient:
                 connection = MCPConnection(config)
                 await connection.connect()
                 self.connections[server_type] = connection
+
+                # Log available tools for debugging
+                tools = await connection.list_tools()
+                logger.info(
+                    "mcp_available_tools",
+                    server_type=server_type.value,
+                    tools=tools,
+                )
             except Exception as e:
                 logger.error(
                     "mcp_connection_failed",

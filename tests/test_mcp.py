@@ -4,20 +4,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from eagleeye.mcp.client import (
+from mcp_integration.client import (
     SLACK_GET_CHANNEL_HISTORY,
     SLACK_LIST_CHANNELS,
     MCPConnection,
     MCPSearchClient,
     _server_type_to_result_type,
 )
-from eagleeye.mcp.servers import (
+from mcp_integration.servers import (
     SEARCH_TOOL_NAMES,
     MCPServerConfig,
     ServerType,
     get_search_tool_arguments,
 )
-from eagleeye.models.search import SearchResultType
+from models.search import SearchResultType
 
 
 class TestMCPServerConfig:
@@ -54,7 +54,7 @@ class TestMCPServerConfig:
 
         assert config.server_type == ServerType.LINEAR
         assert config.command == "npx"
-        assert "linear-mcp-server" in config.args
+        assert "@tacticlaunch/mcp-linear" in config.args
         assert config.env["LINEAR_API_KEY"] == "lin_api_key"
 
     def test_custom_config(self) -> None:
@@ -96,11 +96,11 @@ class TestSearchToolNames:
 
     def test_notion_tool_name(self) -> None:
         """Test Notion search tool name."""
-        assert SEARCH_TOOL_NAMES[ServerType.NOTION] == "notion_search"
+        assert SEARCH_TOOL_NAMES[ServerType.NOTION] == "API-post-search"
 
     def test_linear_tool_name(self) -> None:
         """Test Linear search tool name."""
-        assert SEARCH_TOOL_NAMES[ServerType.LINEAR] == "linear_search_issues"
+        assert SEARCH_TOOL_NAMES[ServerType.LINEAR] == "linear_searchIssues"
 
     def test_slack_tool_constants(self) -> None:
         """Test Slack tool name constants."""
@@ -140,7 +140,7 @@ class TestGetSearchToolArguments:
         args = get_search_tool_arguments(ServerType.LINEAR, "test query", limit=3)
 
         assert args["query"] == "test query"
-        assert args["first"] == 3
+        assert args["limit"] == 3
 
 
 class TestServerTypeToResultType:
@@ -179,8 +179,8 @@ class TestMCPConnection:
         config = MCPServerConfig.slack("token")
         connection = MCPConnection(config)
 
-        with patch("eagleeye.mcp.client.stdio_client") as mock_stdio:
-            with patch("eagleeye.mcp.client.ClientSession") as mock_session_class:
+        with patch("mcp_integration.client.stdio_client") as mock_stdio:
+            with patch("mcp_integration.client.ClientSession") as mock_session_class:
                 mock_stdio.return_value.__aenter__ = AsyncMock(
                     return_value=(MagicMock(), MagicMock())
                 )

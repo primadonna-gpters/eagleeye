@@ -26,9 +26,11 @@ class MCPServerConfig(BaseModel):
     def slack(cls, bot_token: str, team_id: str = "") -> "MCPServerConfig":
         """Create Slack MCP server config.
 
-        Uses @modelcontextprotocol/server-slack (npx).
+        Uses @modelcontextprotocol/server-slack (official).
         Note: This server does not have a search_messages tool.
-        Use slack_get_channel_history for recent messages.
+        We use slack_list_channels + slack_get_channel_history
+        with client-side filtering.
+        See: https://www.npmjs.com/package/@modelcontextprotocol/server-slack
         """
         env = {"SLACK_BOT_TOKEN": bot_token}
         if team_id:
@@ -57,23 +59,24 @@ class MCPServerConfig(BaseModel):
     def linear(cls, api_key: str) -> "MCPServerConfig":
         """Create Linear MCP server config.
 
-        Uses linear-mcp-server (npx).
+        Uses @tacticlaunch/mcp-linear which is actively maintained.
+        The original linear-mcp-server is deprecated.
+        See: https://www.npmjs.com/package/@tacticlaunch/mcp-linear
         """
         return cls(
             server_type=ServerType.LINEAR,
             command="npx",
-            args=["-y", "linear-mcp-server"],
+            args=["-y", "@tacticlaunch/mcp-linear"],
             env={"LINEAR_API_KEY": api_key},
         )
 
 
 # Tool name mappings for search operations
-# Note: Slack uses slack_get_channel_history as there is no search tool
-# in the official @modelcontextprotocol/server-slack package
+# Note: Slack uses channel history (no search tool in official package)
 SEARCH_TOOL_NAMES: dict[ServerType, str] = {
-    ServerType.SLACK: "slack_get_channel_history",
-    ServerType.NOTION: "notion_search",
-    ServerType.LINEAR: "linear_search_issues",
+    ServerType.SLACK: "slack_get_channel_history",  # @modelcontextprotocol/server-slack
+    ServerType.NOTION: "API-post-search",  # @notionhq/notion-mcp-server
+    ServerType.LINEAR: "linear_searchIssues",  # @tacticlaunch/mcp-linear
 }
 
 
@@ -92,14 +95,19 @@ def get_search_tool_arguments(
         channel_id: For Slack, the channel ID to get history from.
     """
     if server_type == ServerType.SLACK:
-        # Slack uses channel history instead of search
-        # channel_id is required for Slack
+        # Slack uses channel history - query is used for client-side filtering
         args: dict[str, Any] = {"limit": limit}
         if channel_id:
             args["channel_id"] = channel_id
         return args
     elif server_type == ServerType.NOTION:
-        return {"query": query, "page_size": limit}
+        # Notion API search endpoint parameters
+        return {
+            "query": query,
+            "page_size": limit,
+            "filter": {"property": "object", "value": "page"},
+        }
     elif server_type == ServerType.LINEAR:
-        return {"query": query, "first": limit}
+        # @tacticlaunch/mcp-linear search_issues
+        return {"query": query, "limit": limit}
     return {"query": query}

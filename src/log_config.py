@@ -6,12 +6,15 @@ import sys
 import structlog
 
 
-def configure_logging(*, json_format: bool = False) -> None:
+def configure_logging(
+    *, json_format: bool = False, debug: bool = False
+) -> None:
     """Configure structlog for the application.
 
     Args:
         json_format: If True, output logs in JSON format (for production).
                     If False, use colored console output (for development).
+        debug: If True, set log level to DEBUG for detailed timing logs.
     """
     shared_processors: list[structlog.typing.Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -54,7 +57,7 @@ def configure_logging(*, json_format: bool = False) -> None:
 
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
     # Reduce noise from third-party libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)

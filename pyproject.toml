@@ -1,12 +1,12 @@
 [project]
 name = "eagleeye"
-version = "0.2.0"
-description = "Unified search Slack bot using MCP (Model Context Protocol) for Slack, Notion, and Linear"
+version = "0.3.0"
+description = "AI-powered unified search Slack bot using Claude and MCP for Slack, Notion, and Linear"
 requires-python = ">=3.12"
 dependencies = [
     "slack-bolt>=1.18.0",
     "slack-sdk>=3.27.0",
-    "mcp>=1.0.0",
+    "claude-agent-sdk>=0.1.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
@@ -32,6 +32,25 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mcp.*",
+    "slack_bolt.*",
+    "slack_sdk.*",
+    "claude_agent_sdk.*",
+    "structlog.*",
+]
+ignore_missing_imports = true

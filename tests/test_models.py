@@ -1,6 +1,6 @@
 """Tests for search result models."""
 
-from eagleeye.models.search import SearchResult, SearchResultType
+from models.search import SearchResult, SearchResultType
 
 
 class TestSearchResultType:

@@ -2,18 +2,19 @@
 
 import os
 
-from eagleeye.app import EagleEyeBot
-from eagleeye.config import get_settings
-from eagleeye.logging import configure_logging
+from app import EagleEyeBot
+from config import get_settings
+from log_config import configure_logging
 
 
 def main() -> None:
     """Run the EagleEye bot."""
+    settings = get_settings()
+
     # Use JSON format in production (when ENVIRONMENT=production)
     json_format = os.getenv("ENVIRONMENT", "development") == "production"
-    configure_logging(json_format=json_format)
+    configure_logging(json_format=json_format, debug=settings.debug)
 
-    settings = get_settings()
     bot = EagleEyeBot(settings)
     bot.start()
 
