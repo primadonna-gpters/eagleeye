@@ -464,9 +464,25 @@ class ClaudeSearchAgent:
                                 ),
                             )
                         elif isinstance(block, ToolResultBlock):
+                            # Extract result preview for debugging
+                            result_content = getattr(block, "content", "")
+                            if isinstance(result_content, str):
+                                result_preview = (
+                                    result_content[:300] + "..."
+                                    if len(result_content) > 300
+                                    else result_content
+                                )
+                                result_length = len(result_content)
+                            else:
+                                result_preview = str(result_content)[:300]
+                                result_length = len(str(result_content))
+
                             logger.debug(
                                 "tool_result_received",
+                                tool_use_id=getattr(block, "tool_use_id", None),
                                 turn=turn_count,
+                                result_length=result_length,
+                                result_preview=result_preview,
                                 elapsed_ms=round(message_elapsed * 1000, 2),
                                 elapsed_since_start_ms=round(
                                     (current_time - total_start) * 1000, 2
@@ -475,15 +491,35 @@ class ClaudeSearchAgent:
 
                 # Extract text from assistant messages
                 if isinstance(message, (AssistantMessage, ResultMessage)):
+                    # Count block types for debugging
+                    block_types = [
+                        type(b).__name__ for b in getattr(message, "content", [])
+                    ]
                     logger.debug(
                         "message_received",
                         message_type=type(message).__name__,
                         turn=turn_count,
                         elapsed_ms=round(message_elapsed * 1000, 2),
+                        block_types=block_types,
                     )
                     for block in getattr(message, "content", []):
                         if isinstance(block, TextBlock):
                             final_response = block.text
+                            # Log text preview for debugging
+                            preview = (
+                                block.text[:200] + "..."
+                                if len(block.text) > 200
+                                else block.text
+                            )
+                            logger.debug(
+                                "text_block_received",
+                                turn=turn_count,
+                                text_length=len(block.text),
+                                preview=preview,
+                                elapsed_since_start_ms=round(
+                                    (time.perf_counter() - total_start) * 1000, 2
+                                ),
+                            )
                             # Notify: consolidating (when we get final text)
                             if on_progress and current_server:
                                 if current_server not in completed_servers:
