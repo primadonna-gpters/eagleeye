@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     notion_api_key: str
     linear_api_key: str
     github_token: str = ""  # GitHub Personal Access Token
+    github_org: str = ""  # GitHub organization name to filter searches
 
     # Optional: Enable/disable specific MCP servers
     enable_slack_mcp: bool = True

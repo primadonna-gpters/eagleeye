@@ -124,7 +124,7 @@ For GitHub search:
 2. Use search_issues to find issues and pull requests
 3. Use get_file_contents to retrieve specific file contents
 4. Use list_commits to see recent changes
-
+{github_org_instruction}
 Guidelines:
 - Be concise but informative
 - Highlight the most relevant findings
@@ -275,11 +275,31 @@ class ClaudeSearchAgent:
         # Build allowed tools list based on enabled servers
         self.allowed_tools = self._build_allowed_tools()
 
+        # Build system prompt with GitHub org filter if configured
+        self.system_prompt = self._build_system_prompt()
+
         logger.info(
             "claude_agent_initialized",
             mcp_servers=list(self.mcp_servers.keys()),
             model=model,
+            github_org=settings.github_org or "(not set)",
         )
+
+    def _build_system_prompt(self) -> str:
+        """Build system prompt with dynamic configuration."""
+        github_org = self.settings.github_org
+        if github_org:
+            github_org_instruction = f"""
+IMPORTANT: For GitHub searches, ONLY search within the "{github_org}" organization.
+- Always add "org:{github_org}" to your search queries
+- Example: search_code with query "authentication org:{github_org}"
+- Example: search_issues with query "bug org:{github_org}"
+- Do NOT search public repositories outside this organization
+"""
+        else:
+            github_org_instruction = ""
+
+        return SYSTEM_PROMPT.format(github_org_instruction=github_org_instruction)
 
     def _build_allowed_tools(self) -> list[str]:
         """Build list of allowed MCP tools based on enabled servers."""
@@ -385,7 +405,7 @@ class ClaudeSearchAgent:
         # Configure query options
         options_start = time.perf_counter()
         options = ClaudeAgentOptions(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=self.system_prompt,
             mcp_servers=filtered_servers,
             allowed_tools=filtered_tools,
             model=self.model,
