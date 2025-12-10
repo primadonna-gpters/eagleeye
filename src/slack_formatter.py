@@ -83,6 +83,71 @@ def format_search_loading(query: str) -> dict[str, Any]:
     }
 
 
+# Tool name to display name mapping
+TOOL_DISPLAY_NAMES: dict[str, tuple[str, str]] = {
+    # (emoji, display_name)
+    "slack": (":slack:", "Slack"),
+    "notion": (":notion:", "Notion"),
+    "linear": (":linear:", "Linear"),
+    "github": (":github:", "GitHub"),
+}
+
+
+def format_search_progress(
+    query: str,
+    current_tool: str | None = None,
+    completed_tools: list[str] | None = None,
+    status: str = "searching",
+) -> dict[str, Any]:
+    """Format a search progress message for chat.update.
+
+    Args:
+        query: User's search query.
+        current_tool: Currently executing tool (e.g., "slack", "notion").
+        completed_tools: List of completed tool names.
+        status: Current status ("thinking", "searching", "consolidating").
+
+    Returns:
+        Slack message payload with blocks.
+    """
+    blocks: list[dict[str, Any]] = [
+        create_section_block(f":mag: *{query}*"),
+    ]
+
+    completed_tools = completed_tools or []
+
+    # Build progress text
+    progress_parts: list[str] = []
+
+    # Show completed tools
+    for tool in completed_tools:
+        emoji, name = TOOL_DISPLAY_NAMES.get(tool, (":white_check_mark:", tool))
+        progress_parts.append(f"{emoji} ~{name}~ :white_check_mark:")
+
+    # Show current tool
+    if current_tool:
+        emoji, name = TOOL_DISPLAY_NAMES.get(
+            current_tool, (":hourglass_flowing_sand:", current_tool)
+        )
+        progress_parts.append(f"{emoji} *{name}* 검색 중...")
+
+    if progress_parts:
+        blocks.append(create_section_block(" • ".join(progress_parts)))
+
+    # Status message
+    status_messages = {
+        "thinking": "_Claude가 분석 중..._",
+        "searching": "_검색 중..._",
+        "consolidating": "_결과 종합 중..._",
+    }
+    blocks.append(create_context_block([status_messages.get(status, "_처리 중..._")]))
+
+    return {
+        "text": f"검색 중: {query}",
+        "blocks": blocks,
+    }
+
+
 def format_search_response(text: str) -> dict[str, Any]:
     """Format Claude's search response with Block Kit.
 

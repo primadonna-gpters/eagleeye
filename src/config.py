@@ -23,11 +23,13 @@ class Settings(BaseSettings):
     # Slack MCP uses the same bot token
     notion_api_key: str
     linear_api_key: str
+    github_token: str = ""  # GitHub Personal Access Token
 
     # Optional: Enable/disable specific MCP servers
     enable_slack_mcp: bool = True
     enable_notion_mcp: bool = True
     enable_linear_mcp: bool = True
+    enable_github_mcp: bool = True
 
     # Logging
     debug: bool = False  # Enable DEBUG level logging for detailed timing

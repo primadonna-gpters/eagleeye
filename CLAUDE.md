@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-EagleEye는 Claude Agent SDK와 MCP(Model Context Protocol)를 사용하여 Slack, Notion, Linear를 통합 검색하는 AI 기반 Slack 봇입니다.
+EagleEye는 Claude Agent SDK와 MCP(Model Context Protocol)를 사용하여 Slack, Notion, Linear, GitHub를 통합 검색하는 AI 기반 Slack 봇입니다.
 
 ## Quick Start
 
@@ -69,6 +69,7 @@ Slack Block Kit 메시지 포맷터
 | Slack | `@modelcontextprotocol/server-slack` | 채널/메시지 검색 |
 | Notion | `@notionhq/notion-mcp-server` | 페이지/문서 검색 |
 | Linear | `@tacticlaunch/mcp-linear` | 이슈/프로젝트 검색 |
+| GitHub | `@modelcontextprotocol/server-github` | 코드/이슈/PR 검색 |
 
 ## Coding Standards
 
@@ -110,9 +111,10 @@ def search(self, query):  # 타입 없음
 - `LINEAR_API_KEY` - Linear API 키
 
 선택:
+- `GITHUB_TOKEN` - GitHub Personal Access Token (코드/이슈/PR 검색)
 - `CLAUDE_MODEL` - Claude 모델 (기본: claude-sonnet-4-20250514)
 - `DEBUG` - 디버그 로깅 활성화
-- `ENABLE_SLACK_MCP` / `ENABLE_NOTION_MCP` / `ENABLE_LINEAR_MCP` - MCP 서버 활성화
+- `ENABLE_SLACK_MCP` / `ENABLE_NOTION_MCP` / `ENABLE_LINEAR_MCP` / `ENABLE_GITHUB_MCP` - MCP 서버 활성화
 
 ## Testing
 
