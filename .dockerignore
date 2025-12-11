@@ -1,0 +1,28 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# IDE
+.vscode
+.idea
+
+# Tests
+tests/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Documentation
+*.md
+!CLAUDE.md

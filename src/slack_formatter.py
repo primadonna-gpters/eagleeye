@@ -160,7 +160,7 @@ def format_search_response(text: str) -> dict[str, Any]:
     blocks: list[dict[str, Any]] = []
 
     lines = text.strip().split("\n")
-    current_section = []
+    current_section: list[str] = []
 
     for line in lines:
         if line.strip() == "---":

@@ -1,0 +1,12 @@
+services:
+  eagleeye:
+    build: .
+    container_name: eagleeye-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+    volumes:
+      # Mount Claude CLI config for authentication
+      - ~/.claude:/root/.claude:ro

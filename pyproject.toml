@@ -44,6 +44,7 @@ python_version = "3.12"
 strict = true
 mypy_path = "src"
 explicit_package_bases = true
+exclude = ["src/__main__.py"]
 
 [[tool.mypy.overrides]]
 module = [

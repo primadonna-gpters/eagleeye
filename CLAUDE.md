@@ -34,20 +34,17 @@ src/
 ├── config.py           # Settings (pydantic-settings)
 ├── log_config.py       # structlog 설정
 ├── slack_formatter.py  # Block Kit 포맷터
-├── models/
-│   └── search.py       # SearchResult, SearchResultType
-└── mcp_integration/
-    ├── client.py       # MCPSearchClient (레거시)
-    └── servers.py      # MCP 서버 설정
+└── models/
+    └── search.py       # SearchResult, SearchResultType
 ```
 
 ## Key Components
 
 ### 1. EagleEyeBot (`app.py`)
 Slack Bolt 기반 봇 애플리케이션
-- `/search` 슬래시 커맨드 처리
 - `@EagleEye` 멘션 처리
 - Socket Mode로 실시간 연결
+- 실시간 진행 상태 업데이트 (chat.update)
 
 ### 2. ClaudeSearchAgent (`claude_agent.py`)
 Claude Agent SDK를 사용한 검색 에이전트
@@ -155,3 +152,60 @@ uv run pytest tests/ --cov=src --cov-report=term-missing
 
 ### 시스템 프롬프트 수정
 `claude_agent.py`의 `SYSTEM_PROMPT` 상수 수정
+
+## Deployment
+
+### Docker (권장)
+
+가장 쉬운 배포 방법입니다. Python, Node.js, Claude CLI가 모두 포함됩니다.
+
+```bash
+# 1. Claude CLI 인증 (로컬에서 한 번만)
+claude login
+
+# 2. 환경 변수 설정
+cp .env.example .env
+# .env 파일에 API 키 입력
+
+# 3. Docker 빌드 및 실행
+docker compose up -d
+
+# 로그 확인
+docker compose logs -f
+```
+
+### 수동 배포 (서버 직접 설치)
+
+```bash
+# 1. 필수 도구 설치
+# - Python 3.12+
+# - Node.js 20+ (npx 포함)
+# - uv (Python 패키지 매니저)
+
+# 2. Claude CLI 설치 및 인증
+npm install -g @anthropic-ai/claude-code
+claude login
+
+# 3. 프로젝트 설정
+git clone <repo-url>
+cd eagleeye
+uv sync
+cp .env.example .env
+# .env 파일에 API 키 입력
+
+# 4. 실행 (systemd 서비스로 등록 권장)
+uv run python -m src
+```
+
+### 환경 변수 체크리스트
+
+배포 전 `.env` 파일에 다음 값들이 설정되어 있는지 확인:
+
+- [ ] `SLACK_BOT_TOKEN` - Slack 봇 토큰
+- [ ] `SLACK_APP_TOKEN` - Socket Mode 앱 토큰
+- [ ] `SLACK_SIGNING_SECRET` - 서명 시크릿
+- [ ] `SLACK_TEAM_ID` - 워크스페이스 ID
+- [ ] `NOTION_API_KEY` - Notion API 키
+- [ ] `LINEAR_API_KEY` - Linear API 키
+- [ ] `GITHUB_TOKEN` - GitHub Personal Access Token (선택)
+- [ ] `GITHUB_ORG` - GitHub 조직명 (선택, 검색 범위 제한)
