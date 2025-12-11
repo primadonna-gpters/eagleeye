@@ -128,5 +128,4 @@ class TestHelpResponse:
             if block.get("type") == "section"
         )
         assert "EagleEye" in all_text
-        assert "/search" in all_text
         assert "@EagleEye" in all_text

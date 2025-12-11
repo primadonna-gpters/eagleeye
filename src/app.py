@@ -4,7 +4,7 @@ import asyncio
 import time
 from typing import Any
 
-from slack_bolt import Ack, App, Respond, Say
+from slack_bolt import App, Say
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -52,78 +52,7 @@ class EagleEyeBot:
         self._register_handlers()
 
     def _register_handlers(self) -> None:
-        """Register slash command and event handlers."""
-
-        @self.app.command("/search")
-        def handle_search_command(
-            ack: Ack, command: dict[str, Any], respond: Respond
-        ) -> None:
-            """Handle /search slash command."""
-            handler_start = time.perf_counter()
-            logger.info("search_command_received", user=command.get("user_id"))
-            ack()
-
-            query = command.get("text", "").strip()
-            channel_id = command.get("channel_id", "")
-
-            if not query:
-                respond(**format_help_response())
-                return
-
-            # Post initial loading message and get ts for updates
-            loading_payload = format_search_loading(query)
-            try:
-                result = self.client.chat_postMessage(
-                    channel=channel_id,
-                    text=loading_payload.get("text", ""),
-                    blocks=loading_payload.get("blocks", []),
-                )
-                message_ts = result.get("ts", "")
-            except SlackApiError as e:
-                logger.error("loading_message_failed", error=str(e))
-                respond(**format_search_loading(query))
-                message_ts = ""
-
-            loading_sent = time.perf_counter()
-            logger.debug(
-                "loading_message_sent",
-                elapsed_ms=round((loading_sent - handler_start) * 1000, 2),
-            )
-
-            # Run Claude-powered search with progress updates
-            search_start = time.perf_counter()
-            if message_ts and channel_id:
-                response = self._run_claude_search_with_progress(
-                    query, channel_id, message_ts
-                )
-            else:
-                response = self._run_claude_search(query)
-
-            search_elapsed = time.perf_counter() - search_start
-            logger.info(
-                "claude_search_returned",
-                search_elapsed_ms=round(search_elapsed * 1000, 2),
-                response_length=len(response),
-            )
-
-            # Update the message with final response
-            if response.startswith("__ERROR__:"):
-                error_msg = response[len("__ERROR__:"):]
-                final_payload = format_error_response(error_msg)
-            else:
-                final_payload = format_search_response(response)
-
-            if message_ts and channel_id:
-                self._update_message(channel_id, message_ts, final_payload)
-            else:
-                respond(**final_payload)
-
-            total_elapsed = time.perf_counter() - handler_start
-            logger.info(
-                "search_command_completed",
-                total_elapsed_ms=round(total_elapsed * 1000, 2),
-                query=query,
-            )
+        """Register event handlers."""
 
         @self.app.event("app_mention")
         def handle_mention(event: dict[str, Any], say: Say) -> None:

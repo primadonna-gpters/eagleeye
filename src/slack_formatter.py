@@ -206,25 +206,23 @@ def format_help_response() -> dict[str, Any]:
         Slack message payload with blocks.
     """
     return {
-        "text": "EagleEye 검색 어시스턴트입니다. /search 또는 @EagleEye로 검색하세요.",
+        "text": "EagleEye 검색 어시스턴트입니다. @EagleEye로 검색하세요.",
         "blocks": [
             create_section_block(
-                ":wave: *안녕하세요! EagleEye 검색 어시스턴트입니다.*"
+                ":eagle: *안녕하세요! EagleEye 검색 어시스턴트입니다.*"
             ),
             create_section_block(
-                "Slack, Notion, Linear에서 정보를 찾아드립니다."
+                "Slack, Notion, Linear, GitHub에서 정보를 찾아드립니다."
             ),
             create_divider_block(),
             create_section_block(
-                "*사용법:*\n"
-                "`/search <검색어>` - 슬래시 명령어로 검색\n"
-                "`@EagleEye <질문>` - 멘션으로 검색"
+                "*사용법:*\n" "`@EagleEye <질문>` - 멘션으로 검색"
             ),
             create_section_block(
                 "*예시:*\n"
-                "• `/search 지난주 배포 관련 논의`\n"
-                "• `/search 인증 버그 이슈`\n"
-                "• `/search 프로젝트 문서 어디있어?`"
+                "• `@EagleEye 지난주 배포 관련 논의`\n"
+                "• `@EagleEye 인증 버그 이슈`\n"
+                "• `@EagleEye ai-tutor 레포 최근 PR`"
             ),
         ],
     }
