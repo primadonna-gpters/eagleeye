@@ -1,7 +1,9 @@
 """Main Slack bot application using Claude Agent SDK for unified search."""
 
 import asyncio
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 from slack_bolt import App, Say
@@ -21,6 +23,28 @@ from slack_formatter import (
 )
 
 logger = get_logger(__name__)
+
+# Default health check port
+HEALTH_CHECK_PORT = 8000
+
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """Simple HTTP handler for health checks."""
+
+    def do_GET(self) -> None:
+        """Handle GET requests."""
+        if self.path == "/health" or self.path == "/":
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status": "healthy"}')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format: str, *args: Any) -> None:
+        """Suppress default logging."""
+        pass
 
 
 class EagleEyeBot:
@@ -213,8 +237,18 @@ class EagleEyeBot:
             logger.error("claude_search_failed", error=str(e), query=query)
             return f"__ERROR__:{e!s}"
 
+    def _start_health_server(self) -> None:
+        """Start health check HTTP server in background thread."""
+        server = HTTPServer(("0.0.0.0", HEALTH_CHECK_PORT), HealthCheckHandler)
+        logger.info("health_server_started", port=HEALTH_CHECK_PORT)
+        server.serve_forever()
+
     def start(self) -> None:
         """Start the bot using Socket Mode."""
+        # Start health check server in background
+        health_thread = threading.Thread(target=self._start_health_server, daemon=True)
+        health_thread.start()
+
         handler = SocketModeHandler(self.app, self.settings.slack_app_token)
         logger.info(
             "bot_started",
