@@ -107,7 +107,7 @@ class EagleEyeBot:
 
             # Update the message with final response
             if response.startswith("__ERROR__:"):
-                error_msg = response[len("__ERROR__:"):]
+                error_msg = response[len("__ERROR__:") :]
                 final_payload = format_error_response(error_msg)
             else:
                 final_payload = format_search_response(response)

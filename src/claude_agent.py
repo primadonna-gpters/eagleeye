@@ -38,18 +38,46 @@ ProgressCallback = Callable[[SearchProgress], Awaitable[None]]
 # Keywords for detecting which MCP servers to use
 SERVER_KEYWORDS: dict[str, list[str]] = {
     "slack": [
-        "slack", "채널", "channel", "메시지", "message", "대화", "conversation",
+        "slack",
+        "채널",
+        "channel",
+        "메시지",
+        "message",
+        "대화",
+        "conversation",
     ],
     "notion": [
-        "notion", "노션", "문서", "document", "페이지", "page", "wiki",
+        "notion",
+        "노션",
+        "문서",
+        "document",
+        "페이지",
+        "page",
+        "wiki",
     ],
     "linear": [
-        "linear", "리니어", "이슈", "issue", "티켓", "ticket",
-        "버그", "bug", "태스크", "task",
+        "linear",
+        "리니어",
+        "이슈",
+        "issue",
+        "티켓",
+        "ticket",
+        "버그",
+        "bug",
+        "태스크",
+        "task",
     ],
     "github": [
-        "github", "깃허브", "코드", "code", "pr", "pull request",
-        "커밋", "commit", "레포", "repo",
+        "github",
+        "깃허브",
+        "코드",
+        "code",
+        "pr",
+        "pull request",
+        "커밋",
+        "commit",
+        "레포",
+        "repo",
     ],
 }
 
@@ -310,38 +338,46 @@ IMPORTANT: For GitHub searches, ONLY search within the "{github_org}" organizati
         tools: list[str] = []
 
         if self.settings.enable_slack_mcp:
-            tools.extend([
-                "mcp__slack__slack_list_channels",
-                "mcp__slack__slack_get_channel_history",
-                "mcp__slack__slack_get_thread_replies",
-            ])
+            tools.extend(
+                [
+                    "mcp__slack__slack_list_channels",
+                    "mcp__slack__slack_get_channel_history",
+                    "mcp__slack__slack_get_thread_replies",
+                ]
+            )
 
         if self.settings.enable_notion_mcp:
-            tools.extend([
-                "mcp__notion__API-post-search",
-                "mcp__notion__API-retrieve-a-page",
-                "mcp__notion__API-get-block-children",
-            ])
+            tools.extend(
+                [
+                    "mcp__notion__API-post-search",
+                    "mcp__notion__API-retrieve-a-page",
+                    "mcp__notion__API-get-block-children",
+                ]
+            )
 
         if self.settings.enable_linear_mcp:
-            tools.extend([
-                "mcp__linear__linear_searchIssues",
-                "mcp__linear__linear_getIssueById",
-                "mcp__linear__linear_getIssues",
-            ])
+            tools.extend(
+                [
+                    "mcp__linear__linear_searchIssues",
+                    "mcp__linear__linear_getIssueById",
+                    "mcp__linear__linear_getIssues",
+                ]
+            )
 
         if self.settings.enable_github_mcp and self.settings.github_token:
-            tools.extend([
-                "mcp__github__search_repositories",
-                "mcp__github__search_code",
-                "mcp__github__search_issues",
-                "mcp__github__get_file_contents",
-                "mcp__github__list_commits",
-                "mcp__github__get_issue",
-                "mcp__github__get_pull_request",
-                "mcp__github__list_issues",
-                "mcp__github__list_pull_requests",
-            ])
+            tools.extend(
+                [
+                    "mcp__github__search_repositories",
+                    "mcp__github__search_code",
+                    "mcp__github__search_issues",
+                    "mcp__github__get_file_contents",
+                    "mcp__github__list_commits",
+                    "mcp__github__get_issue",
+                    "mcp__github__get_pull_request",
+                    "mcp__github__list_issues",
+                    "mcp__github__list_pull_requests",
+                ]
+            )
 
         return tools
 

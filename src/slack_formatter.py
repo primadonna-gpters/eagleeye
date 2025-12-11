@@ -215,9 +215,7 @@ def format_help_response() -> dict[str, Any]:
                 "Slack, Notion, Linear, GitHub에서 정보를 찾아드립니다."
             ),
             create_divider_block(),
-            create_section_block(
-                "*사용법:*\n" "`@EagleEye <질문>` - 멘션으로 검색"
-            ),
+            create_section_block("*사용법:*\n`@EagleEye <질문>` - 멘션으로 검색"),
             create_section_block(
                 "*예시:*\n"
                 "• `@EagleEye 지난주 배포 관련 논의`\n"

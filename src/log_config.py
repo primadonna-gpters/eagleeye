@@ -6,9 +6,7 @@ import sys
 import structlog
 
 
-def configure_logging(
-    *, json_format: bool = False, debug: bool = False
-) -> None:
+def configure_logging(*, json_format: bool = False, debug: bool = False) -> None:
     """Configure structlog for the application.
 
     Args:
