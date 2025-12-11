@@ -1,7 +1,5 @@
 """Tests for Slack message formatting utilities."""
 
-import pytest
-
 from slack_formatter import (
     create_context_block,
     create_divider_block,
