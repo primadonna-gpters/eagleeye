@@ -33,6 +33,8 @@ RUN npx -y @modelcontextprotocol/server-github --version || true
 # Environment variables (override at runtime)
 ENV PYTHONUNBUFFERED=1
 ENV ENVIRONMENT=production
+ENV PYTHONPATH=/app/src
 
 # Run the bot
-CMD ["uv", "run", "python", "-m", "src"]
+WORKDIR /app
+CMD ["uv", "run", "python", "/app/src/__main__.py"]
