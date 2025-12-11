@@ -8,5 +8,5 @@ services:
     environment:
       - ENVIRONMENT=production
     volumes:
-      # Mount Claude CLI config for authentication
-      - ~/.claude:/root/.claude:ro
+      # Mount Claude CLI config for authentication (non-root user)
+      - ~/.claude:/home/eagleuser/.claude:ro

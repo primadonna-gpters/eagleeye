@@ -33,7 +33,7 @@ jobs:
               --name eagleeye \
               --restart unless-stopped \
               --env-file .env \
-              -v ~/.claude:/root/.claude:ro \
+              -v ~/.claude:/home/eagleuser/.claude:ro \
               eagleeye
 
             # Cleanup old images
